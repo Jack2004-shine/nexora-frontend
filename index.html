@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEXORA AI</title>
-
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#080808">
 <style>
 * {
     box-sizing: border-box;
@@ -28,8 +29,7 @@ header {
     border-bottom: 1px solid #20283a;
 }
 
-.logo {
-    font-size: 25px;
+.logo {titlefont-size: 25px;
     font-weight: bold;
     letter-spacing: 4px;
     color: #55dfff;
@@ -256,6 +256,13 @@ document.getElementById("userInput")
     if (event.key === "Enter") sendMessage();
 });
 </script>
-
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/service-worker.js")
+            .catch(error => console.log("Service Worker Error:", error));
+    });
+}
+</script>
 </body>
 </html>
