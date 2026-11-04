@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXORA AI</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: #080b14;
+    color: white;
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+}
+
+header {
+    padding: 22px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #20283a;
+}
+
+.logo {
+    font-size: 25px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: #55dfff;
+    text-shadow: 0 0 15px #168bff;
+}
+
+.status {
+    color: #62f5b0;
+    font-size: 12px;
+}
+
+main {
+    text-align: center;
+    padding: 55px 20px 25px;
+}
+
+.core {
+    width: 125px;
+    height: 125px;
+    margin: 0 auto 25px;
+    border: 2px solid #55dfff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 55px;
+    color: #55dfff;
+    box-shadow: 0 0 20px #087cff,
+                inset 0 0 20px #087cff;
+}
+
+h1 {
+    font-size: 30px;
+    letter-spacing: 5px;
+    color: #ffffff;
+}
+
+.tagline {
+    margin-top: 12px;
+    color: #8da7c8;
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+.welcome {
+    margin-top: 45px;
+    color: #55dfff;
+    font-size: 17px;
+}
+
+.subtitle {
+    color: #9ba9bd;
+    margin-top: 12px;
+    font-size: 14px;
+}
+
+.chat {
+    margin: 35px 16px 20px;
+    padding: 15px;
+    border: 1px solid #253b58;
+    border-radius: 16px;
+    background: #111827;
+}
+
+#messages {
+    max-height: 180px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    text-align: left;
+}
+
+.message {
+    padding: 10px;
+    margin: 8px 0;
+    border-radius: 10px;
+    background: #1c2b42;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.input-area {
+    display: flex;
+    gap: 8px;
+}
+
+input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px;
+    border-radius: 10px;
+    border: 1px solid #34516d;
+    background: #080e1b;
+    color: white;
+    outline: none;
+}
+
+button {
+    border: none;
+    border-radius: 10px;
+    padding: 0 17px;
+    background: #168bff;
+    color: white;
+    font-size: 16px;
+}
+
+.voice {
+    margin-top: 15px;
+    color: #8da7c8;
+    font-size: 12px;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #53647e;
+    font-size: 11px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <div class="logo">NEXORA</div>
+    <div class="status">● SYSTEM ONLINE</div>
+</header>
+
+<main>
+    <div class="core">N</div>
+
+    <h1>NEXORA AI</h1>
+
+    <p class="tagline">
+        YOUR INTELLIGENCE. YOUR CONTROL. YOUR FUTURE.
+    </p>
+
+    <p class="welcome">Welcome back.</p>
+
+    <p class="subtitle">
+        Your personal AI assistant is ready.
+    </p>
+</main>
+
+<section class="chat">
+    <div id="messages">
+        <div class="message">
+            NEXORA: Hello! How can I help you today?
+        </div>
+    </div>
+
+    <div class="input-area">
+        <input id="userInput"
+        type="text"
+        placeholder="Message NEXORA...">
+
+        <button onclick="sendMessage()">➤</button>
+    </div>
+
+    <p class="voice">🎙 Voice system — Coming soon</p>
+</section>
+
+<footer>
+    NEXORA AI · PERSONAL ASSISTANT
+</footer>
+
+<script>
+
+async function sendMessage() {
+    const input = document.getElementById("userInput");
+    const messages = document.getElementById("messages");
+
+    const userText = input.value.trim();
+    if (!userText) return;
+
+    const userMessage = document.createElement("div");
+    userMessage.className = "message";
+    userMessage.textContent = "YOU: " + userText;
+    messages.appendChild(userMessage);
+
+    input.value = "";
+    input.disabled = true;
+
+    const reply = document.createElement("div");
+    reply.className = "message";
+    reply.textContent = "NEXORA: Thinking...";
+    messages.appendChild(reply);
+
+    messages.scrollTop = messages.scrollHeight;
+console.log("NEXORA SEND STARTED");
+    try {
+        const response = await fetch(
+            "https://nexora-brain2026.shinehtett118.workers.dev",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    message: userText
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "AI connection failed");
+        }
+
+        reply.textContent = "NEXORA: " + data.reply;
+
+    } catch (error) {
+        reply.textContent = "NEXORA: Connection error - " + error.message;
+    }
+
+    input.disabled = false;
+    input.focus();
+    messages.scrollTop = messages.scrollHeight;
+}
+
+
+document.getElementById("userInput")
+.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") sendMessage();
+});
+</script>
+
+</body>
+</html>
