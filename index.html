@@ -150,7 +150,7 @@ const sidebar = document.getElementById("sidebar");
 let chats = [];  
 let activeChatId = null;  
 let sending = false;  
-  
+ let currentUser = null; 
 function showAuthPanel(panel) {  
   welcomePanel.classList.toggle("hidden", panel !== "welcome");  
   loginForm.classList.toggle("hidden", panel !== "login");  
@@ -185,10 +185,14 @@ loginForm.addEventListener("submit", async (event) => {
   if (error) authMessage.textContent = error.message;  
 });  
   
-document.getElementById("logoutBtn").addEventListener("click", async () => {  
-  const { error } = await supabaseClient.auth.signOut();  
-  if (error) showToast(error.message);  
-});  
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  const { error } = await supabaseClient.auth.signOut();
+
+  if (error) {
+    showToast(error.message);
+    return;
+  }
+});
   
 supabaseClient.auth.onAuthStateChange((_event, session) => {  
   if (session?.user) enterApp(session.user);  
@@ -201,13 +205,17 @@ async function checkSession() {
   if (data.session?.user) enterApp(data.session.user);  
   else leaveApp();  
 }  
-function enterApp(user) {  
-  authView.classList.add("hidden");  
-  appView.classList.remove("hidden");  
-  document.getElementById("accountEmail").textContent = user.email || "Signed in";  
-  if (!activeChatId) createChat();  
-}  
-function leaveApp() {  
+async function enterApp(user) {
+  if (currentUser?.id === user.id && !appView.classList.contains("hidden")) return;
+
+  currentUser = user;
+  authView.classList.add("hidden");
+  appView.classList.remove("hidden");
+  document.getElementById("accountEmail").textContent = user.email || "Signed in";
+
+  await loadChats(user);
+}
+function leaveApp() {   currentUser = null; 
   appView.classList.add("hidden");  
   authView.classList.remove("hidden");  
   showAuthPanel("welcome");  
@@ -215,16 +223,83 @@ function leaveApp() {
   activeChatId = null;  
   historyList.innerHTML = "";  
   messages.innerHTML = "";  
-}  
-function createChat() {  
-  const chat = { id: String(Date.now()) + Math.random().toString(16).slice(2), title: "New chat", items: [] };  
-  chats.unshift(chat);  
-  activeChatId = chat.id;  
-  renderHistory();  
-  renderMessages();  
-  sidebar.classList.remove("open");  
-  userInput.focus();  
-}  
+}    async function loadChats(user) {
+  const { data: chatData, error: chatError } = await supabaseClient
+    .from("chats")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (chatError) {
+    console.error("Load Chats Error:", chatError);
+    alert("Could not load chats: " + chatError.message);
+    return;
+  }
+
+  const { data: messageData, error: messageError } = await supabaseClient
+    .from("messages")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+
+  if (messageError) {
+    console.error("Load Messages Error:", messageError);
+    alert("Could not load messages: " + messageError.message);
+    return;
+  }
+
+  chats = chatData.map(chat => ({
+    id: chat.id,
+    title: chat.title,
+    items: messageData
+      .filter(message => message.chat_id === chat.id)
+      .map(message => ({
+        role: message.role,
+        text: message.content
+      }))
+  }));
+
+  if (chats.length === 0) {
+    await createChat();
+    return;
+  }
+
+  activeChatId = chats[0].id;
+  renderHistory();
+  renderMessages();
+}
+async function createChat() {
+  if (!currentUser) return;
+
+  const { data, error } = await supabaseClient
+    .from("chats")
+    .insert({
+      user_id: currentUser.id,
+      title: "New chat"
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Create Chat Error:", error);
+    alert("Could not create chat: " + error.message);
+    return;
+  }
+
+  const chat = {
+    id: data.id,
+    title: data.title,
+    items: []
+  };
+
+  chats.unshift(chat);
+  activeChatId = chat.id;
+
+  renderHistory();
+  renderMessages();
+  sidebar.classList.remove("open");
+  userInput.focus();
+}
 function currentChat() { return chats.find(chat => chat.id === activeChatId); }  
 function renderHistory() {  
   historyList.innerHTML = "";  
@@ -275,48 +350,103 @@ function showToast(text) {
   toast.classList.remove("hidden");  
   setTimeout(() => toast.classList.add("hidden"), 3500);  
 }  
-async function sendMessage() {  
-  const userText = userInput.value.trim();  
-  if (!userText || sending) return;  
-  let chat = currentChat();  
-  if (!chat) { createChat(); chat = currentChat(); }  
-  chat.items.push({ role: "user", text: userText });  
-  if (chat.title === "New chat") {  
-    chat.title = userText.slice(0, 32);  
-    renderHistory();  
-  }  
-  appendMessageElement("user", userText);  
-  userInput.value = "";  
-  resizeInput();  
-  const replyBubble = appendMessageElement("assistant", "Thinking...");  
-  chat.items.push({ role: "assistant", text: "Thinking..." });  
-  const replyIndex = chat.items.length - 1;  
-  sending = true;  
-  sendBtn.disabled = true;  
-  userInput.disabled = true;  
-  try {  
-    const response = await fetch(WORKER_URL, {  
-      method: "POST",  
-      headers: { "Content-Type": "application/json" },  
-      body: JSON.stringify({ message: userText })  
-    });  
-    const data = await response.json();  
-    if (!response.ok) throw new Error(data.error || "AI connection failed");  
-    const answer = data.reply || "I couldn't create a reply.";  
-    replyBubble.textContent = answer;  
-    chat.items[replyIndex].text = answer;  
-  } catch (error) {  
-    const errorText = "Connection error: " + error.message;  
-    replyBubble.textContent = errorText;  
-    chat.items[replyIndex].text = errorText;  
-  } finally {  
-    sending = false;  
-    sendBtn.disabled = false;  
-    userInput.disabled = false;  
-    userInput.focus();  
-    messages.scrollTop = messages.scrollHeight;  
-  }  
-}  
+async function sendMessage() {
+  const userText = userInput.value.trim();
+  if (!userText || sending) return;
+
+  if (!currentUser) return;
+
+  let chat = currentChat();
+
+  if (!chat) {
+    await createChat();
+    chat = currentChat();
+  }
+
+  if (!chat) return;
+
+  chat.items.push({ role: "user", text: userText });
+
+  if (chat.title === "New chat") {
+    chat.title = userText.slice(0, 32);
+    renderHistory();
+
+    const { error: titleError } = await supabaseClient
+      .from("chats")
+      .update({ title: chat.title })
+      .eq("id", chat.id)
+      .eq("user_id", currentUser.id);
+
+    if (titleError) console.error("Title Save Error:", titleError);
+  }
+
+  appendMessageElement("user", userText);
+  userInput.value = "";
+  resizeInput();
+
+  const replyBubble = appendMessageElement("assistant", "Thinking...");
+  chat.items.push({ role: "assistant", text: "Thinking..." });
+  const replyIndex = chat.items.length - 1;
+
+  sending = true;
+  sendBtn.disabled = true;
+  userInput.disabled = true;
+
+  try {
+    const { error: userSaveError } = await supabaseClient
+      .from("messages")
+      .insert({
+        chat_id: chat.id,
+        user_id: currentUser.id,
+        role: "user",
+        content: userText
+      });
+
+    if (userSaveError) throw userSaveError;
+
+    const response = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: userText })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "AI connection failed");
+    }
+
+    const answer = data.reply || "I couldn't create a reply.";
+
+    replyBubble.textContent = answer;
+    chat.items[replyIndex].text = answer;
+
+    const { error: aiSaveError } = await supabaseClient
+      .from("messages")
+      .insert({
+        chat_id: chat.id,
+        user_id: currentUser.id,
+        role: "assistant",
+        content: answer
+      });
+
+    if (aiSaveError) {
+      console.error("AI Message Save Error:", aiSaveError);
+    }
+
+  } catch (error) {
+    const errorText = "Connection error: " + error.message;
+    replyBubble.textContent = errorText;
+    chat.items[replyIndex].text = errorText;
+
+  } finally {
+    sending = false;
+    sendBtn.disabled = false;
+    userInput.disabled = false;
+    userInput.focus();
+    messages.scrollTop = messages.scrollHeight;
+  }
+  }
 sendBtn.addEventListener("click", sendMessage);  
 userInput.addEventListener("keydown", event => {  
   if (event.key === "Enter" && !event.shiftKey) {  
